@@ -8,6 +8,15 @@ authors = ["DelusionalOptimist"]
 
 Reddit is a great place which if used wisely can work as a great source of information of all sorts. This blog highlights some good subreddits for people who like computers/programming/tech in general. Rather than being a mega subreddit list, this is a curated list that I and some other folks at [JODC](https://jiitodc.netlify.app/) find interesting.
 
+## My two cents
+There are many other great subreddits that this post may not include, one of the reason being they are very specific to the reader's interest (or maybe I am unaware of them :P) and I leave it upto the reader to find them. Some general advice on finding good communities for your needs and making most out of them:
+- Use the sidebar to find related communities.
+- Some of the communities include a wiki where they list FAQs and general advice. Its a nice refined compilation of the subreddit's threads.
+- Use thread flairs in the sidebar to filter questions, topics, resources or whatever the community has to offer.
+- Use custom feeds to keep your main feed clean. [Here](https://thenextweb.com/basics/2019/07/19/reddit-custom-feeds-multis/) is how you can make custom feeds for yourself. Use [r/multihub](https://www.reddit.com/r/multihub/) to find public feeds/multis.
+- Keep an eye on the comments. You may find gold there.
+- Obviously use the search bar or use a search engine to find communities/threads.
+
 ## Good programming/computer-science related communities
 #### [r/learnprogramming](https://www.reddit.com/r/learnprogramming/)
 A subreddit where people post resources to learn programming including self-written tutorials, course reviews, programmer roadmaps etc. Programming related questions are welcome. Take a look at their [faq](https://www.reddit.com/r/learnprogramming/wiki/faq) which is a complete guide on getting started.
@@ -30,7 +39,7 @@ You can find a subreddit for your beloved language as well. Some popular ones:
 - [rust](http://www.reddit.com/r/rust)
 - A bigger list can be found [here](https://www.reddit.com/r/programming/wiki/faq#wiki_what_language_reddits_are_there.3F).
 <br/>
-You won't want to pollute your feed with unneccessary posts, so join subreddits wisely.
+You won't want to pollute your feed with unnecessary posts, so join subreddits wisely.
 <br/>
 
 ## Linux
@@ -101,11 +110,3 @@ A subreddit for those with questions about working in the tech industry or in a 
 
 [A thread highlighting programming trends of 2021](https://www.reddit.com/r/cscareerquestions/comments/kzum7m/which_programming_books_are_still_must_reads_aka/)
 
-## My two cents
-There are many other great subreddits that this post may not have included, one of the reason being they are very specific to the reader's interest (or maybe I am unaware of them :P) and I leave it upto the reader to find them. Some general advice on finding good communities for your needs and making most out of them:
-- Use the sidebar to find related communities.
-- Some of the communities include a wiki where they list FAQs and general advice. Its a nice refined compilation of the subreddit's threads.
-- Use thread flairs in the sidebar to filter questions, topics, resources or whatever the community has to offer.
-- Use custom feeds to keep your main feed clean. [Here](https://thenextweb.com/basics/2019/07/19/reddit-custom-feeds-multis/) is how you can make custom feeds for yourself. Use [r/multihub](https://www.reddit.com/r/multihub/) to find public feeds/multis.
-- Keep an eye on the comments. You may find gold there.
-- Obviously use the search bar or use a search engine to find communities/threads.
