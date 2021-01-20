@@ -1,0 +1,39 @@
+# The URL the site will be built for
+base_url = "https://delusionaloptimist.github.io"
+
+theme = "sam"
+# Whether to automatically compile all Sass files in the sass directory
+compile_sass = true
+
+# Whether to build a search index to be used later on by a JavaScript library
+build_search_index = false
+
+check_external_links = true
+
+taxonomies = [
+    { name = "tags", rss = true },
+    { name = "authors", rss = true }
+]
+
+[markdown]
+# Whether to do syntax highlighting
+# Theme can be customised by setting the `highlight_theme` variable to a theme supported by Zola
+highlight_code = true
+
+[extra]
+show_word_count = true
+show_reading_time = true
+
+date_format = "%a %b %e, %Y"
+
+home = "home"
+
+sam_menu = [
+    { text = "posts", link = "/posts" },
+    { text = "about", link = "/about" },
+    { text = "github", link = "https://github.com/DelusionalOptimist" }
+]
+sam_bottom_menu = true
+
+[extra.sam_footer]
+text = "Made with zola, themed with zola-sam"
