@@ -30,9 +30,9 @@ date_format = "%a %b %e, %Y"
 home = "home"
 
 sam_menu = [
-    { text = "posts", link = "/posts" },
-    { text = "about", link = "/about" },
-    { text = "github", link = "https://github.com/DelusionalOptimist" }
+    { text = "About", link = "/about" },
+    { text = "Posts", link = "/posts" },
+    { text = "Github", link = "https://github.com/DelusionalOptimist" }
 ]
 sam_bottom_menu = true
 
