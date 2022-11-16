@@ -1,8 +1,8 @@
 +++
 title = "Reddit for you"
-date = 2021-01-20
-[taxonomies]
-tags = ["reddit", "beginner"]
+date = "2021-01-20"
+type = "post"
+tags = ["reddit", "beginner", "curated-content"]
 authors = ["DelusionalOptimist"]
 +++
 

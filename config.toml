@@ -1,40 +1,60 @@
-# The URL the site will be built for
-base_url = "https://delusionaloptimist.github.io"
-title = "DelusionalOptimist"
+baseURL = "https://delusionaloptimist.github.io/"
+defaultContentLanguage = "en"
+languageCode = "en"
 
-theme = "sam"
-# Whether to automatically compile all Sass files in the sass directory
-compile_sass = true
+title = "Rudraksh Pareek (DelusionalOptimist)"
 
-# Whether to build a search index to be used later on by a JavaScript library
-build_search_index = false
+theme = "gokarna"
 
-check_external_links = true
+enableEmoji = true
+enableRobotsTXT = true
 
-taxonomies = [
-    { name = "tags", rss = true },
-    { name = "authors", rss = true }
-]
+[params]
+  title = "Hey! I'm Rudraksh."
+  subtitle = "I also go by DelusionalOptimist across the interwebs : )"
+  footer = "Rudraksh Pareek"
+  socialIcons = [
+    {name = "github", url = "https://github.com/DelusionalOptimist/"},
+    {name = "twitter", url = "https://twitter.com/Del_Optimist/"},
+    {name = "linkedin", url = "https://linkedin.com/in/rudraksh-pareek/"},
+  ]
+  showPostsOnHomePage = "popular"
+  metaKeywords = ["blog"]
 
-[markdown]
-# Whether to do syntax highlighting
-# Theme can be customised by setting the `highlight_theme` variable to a theme supported by Zola
-highlight_code = true
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
 
-[extra]
-show_word_count = true
-show_reading_time = true
+  [[menu.main]]
+    name = "About"
+    url = "/about"
+    weight = 2
 
-date_format = "%a %b %e, %Y"
+  [[menu.main]]
+    name = "Resume"
+    url = "https://drive.google.com/file/d/1IS6nEOysnhUEo24BhjpgezTzi0Fz6xCP/view"
+    weight = 3
 
-home = "home"
+  [[menu.main]]
+    name = "Posts"
+    url = "/posts/"
+    weight = 4
 
-sam_menu = [
-    { text = "About", link = "/about" },
-    { text = "Posts", link = "/posts" },
-    { text = "Github", link = "https://github.com/DelusionalOptimist" }
-]
-sam_bottom_menu = true
+  [[menu.main]]
+    name = "Talks"
+    url = "/talks/"
+    weight = 5
 
-[extra.sam_footer]
-text = "Made with zola, themed with zola-sam"
+  [[menu.main]]
+    identifier = "github"
+    pre = "<span data-feather='github'></span>"
+    url = "https://github.com/DelusionalOptimist"
+    weight = 6
+
+  [[menu.main]]
+    identifier = "rss"
+    pre = "<span data-feather='rss'></span>"
+    url = "/index.xml"
+    weight = 7
