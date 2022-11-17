@@ -1,5 +1,4 @@
-#baseURL = "https://delusionaloptimist.github.io/"
-baseURL = "localhost:1313"
+baseURL = "https://delusionaloptimist.github.io/"
 defaultContentLanguage = "en"
 languageCode = "en"
 
