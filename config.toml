@@ -1,4 +1,5 @@
-baseURL = "https://delusionaloptimist.github.io/"
+#baseURL = "https://delusionaloptimist.github.io/"
+baseURL = "localhost:1313"
 defaultContentLanguage = "en"
 languageCode = "en"
 
@@ -12,6 +13,7 @@ enableRobotsTXT = true
 [params]
   title = "Hey! I'm Rudraksh."
   subtitle = "I also go by DelusionalOptimist across the interwebs : )"
+	avatarURL = "/rudraksh-pareek.jpg"
   footer = "Rudraksh Pareek"
   socialIcons = [
     {name = "github", url = "https://github.com/DelusionalOptimist/"},
