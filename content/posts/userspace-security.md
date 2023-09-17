@@ -21,12 +21,12 @@ ptrace is a syscall in \*nix operating systems. It allows a process (tracer) to 
 But ptrace has existed for a long time. It is very likely that you've used a tool based on ptrace. Debuggers like gdb and delve use ptrace to insert breakpoints into your program, strace uses ptrace to trace syscalls made by an application and so on.
 
 ### How does ptrace work
-![ptrace-basics](https://github.com/DelusionalOptimist/delusionaloptimist.github.io/blob/main/static/prtace-1.png)
+![ptrace-basics](https://github.com/DelusionalOptimist/delusionaloptimist.github.io/blob/master/static/ptrace-1.png)
 
 #### Enforcement with ptrace
 Now, if we can use ptrace to inspect and change the process state, it should be possible to use it to define what an application can and cannot do. Further, since ptrace can do all this in the userspace itself, we can use it to create a sandbox like environment and do enforcement only in the context of our workloads, reducing the coupling with underlying infrastructure.
 
-![ptrace-enforcement](https://github.com/DelusionalOptimist/delusionaloptimist.github.io/blob/main/static/prtace-2.png)
+![ptrace-enforcement](https://github.com/DelusionalOptimist/delusionaloptimist.github.io/blob/master/static/ptrace-2.png)
 
 ---WIP---
 ### SHOW ME SOME CODE!
