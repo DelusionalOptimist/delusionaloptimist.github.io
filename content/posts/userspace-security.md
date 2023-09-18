@@ -141,5 +141,5 @@ func getProcCwd(pid int) string {
 }
 ```
 
-[1]: /static/ptrace-1.png
-[2]: /static/ptrace-2.png
+[1]: /ptrace-1.png
+[2]: /ptrace-2.png
