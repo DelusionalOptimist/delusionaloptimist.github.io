@@ -1,0 +1,377 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{--accent-color:#FF4D4D}</style><title>Userspace Security Mechanisms: Ptrace</title><meta name=description content><meta name=keywords content="blog,security,linux,ptrace,cloud"><meta property="og:url" content="https://delusionaloptimist.github.io/posts/userspace-security-ptrace/"><meta property="og:type" content="website"><meta property="og:title" content="Userspace Security Mechanisms: Ptrace"><meta property="og:description" content><meta property="og:image" content="https://delusionaloptimist.github.io/rudraksh-pareek.jpg"><meta property="og:image:secure_url" content="https://delusionaloptimist.github.io/rudraksh-pareek.jpg"><meta name=twitter:card content="summary_large_image"><meta name=twitter:title content="Userspace Security Mechanisms: Ptrace"><meta name=twitter:description content><meta property="twitter:domain" content="https://delusionaloptimist.github.io/posts/userspace-security-ptrace/"><meta property="twitter:url" content="https://delusionaloptimist.github.io/posts/userspace-security-ptrace/"><meta name=twitter:image content="https://delusionaloptimist.github.io/rudraksh-pareek.jpg"><link rel=canonical href=https://delusionaloptimist.github.io/posts/userspace-security-ptrace/><link rel=stylesheet type=text/css href=/css/normalize.min.css media=print><link rel=stylesheet type=text/css href=/css/main.min.css><link id=dark-theme rel=stylesheet href=/css/dark.min.css><script src=/js/bundle.min.edd985581bf860dfb4507e5885197f1680160c7fe19f23b31e183126d99dd596.js integrity="sha256-7dmFWBv4YN+0UH5YhRl/FoAWDH/hnyOzHhgxJtmd1ZY="></script></head><body><script type=text/javascript>setThemeByUserPref()</script><header class=header><nav class=header-nav><div class=avatar><a href=https://delusionaloptimist.github.io/><img src=https://delusionaloptimist.github.io//rudraksh-pareek.jpg alt=avatar></a></div><div class=nav-title><a class=nav-brand href=https://delusionaloptimist.github.io/>Rudraksh Pareek (DelusionalOptimist)</a></div><div class=nav-links><div class=nav-link><a href=https://delusionaloptimist.github.io/>Home</a></div><div class=nav-link><a href=https://delusionaloptimist.github.io/about>About</a></div><div class=nav-link><a href=https://drive.google.com/file/d/1IS6nEOysnhUEo24BhjpgezTzi0Fz6xCP/view>Resume</a></div><div class=nav-link><a href=https://delusionaloptimist.github.io/posts/>Posts</a></div><div class=nav-link><a href=https://delusionaloptimist.github.io/talks/>Talks</a></div><div class=nav-link><a href=https://github.com/DelusionalOptimist><span data-feather=github></span></a></div><div class=nav-link><a href=https://delusionaloptimist.github.io/index.xml><span data-feather=rss></span></a></div><span class=nav-icons-divider></span><div class="nav-link dark-theme-toggle"><span id=dark-theme-toggle-screen-reader-target class=sr-only></span>
+<a><span id=theme-toggle-icon data-feather=moon></span></a></div><div class=nav-link id=hamburger-menu-toggle><span id=hamburger-menu-toggle-screen-reader-target class=sr-only>menu</span>
+<a><span data-feather=menu></span></a></div><ul class="nav-hamburger-list visibility-hidden"><li class=nav-item><a href=https://delusionaloptimist.github.io/>Home</a></li><li class=nav-item><a href=https://delusionaloptimist.github.io/about>About</a></li><li class=nav-item><a href=https://drive.google.com/file/d/1IS6nEOysnhUEo24BhjpgezTzi0Fz6xCP/view>Resume</a></li><li class=nav-item><a href=https://delusionaloptimist.github.io/posts/>Posts</a></li><li class=nav-item><a href=https://delusionaloptimist.github.io/talks/>Talks</a></li><li class=nav-item><a href=https://github.com/DelusionalOptimist><span data-feather=github></span></a></li><li class=nav-item><a href=https://delusionaloptimist.github.io/index.xml><span data-feather=rss></span></a></li><li class="nav-item dark-theme-toggle"><span id=dark-theme-toggle-screen-reader-target class=sr-only>theme</span>
+<a><span id=theme-toggle-icon data-feather=moon></span></a></li></ul></div></nav></header><main id=content><div class="post container"><div class=post-header-section><h1>Userspace Security Mechanisms: Ptrace</h1><small role=doc-subtitle></small><p class=post-date>September 16, 2023</p><ul class=post-tags><li class=post-tag><a href=https://delusionaloptimist.github.io/tags/security>security</a></li><li class=post-tag><a href=https://delusionaloptimist.github.io/tags/linux>linux</a></li><li class=post-tag><a href=https://delusionaloptimist.github.io/tags/ptrace>ptrace</a></li><li class=post-tag><a href=https://delusionaloptimist.github.io/tags/cloud>cloud</a></li></ul></div><div class=post-content><p><h1 id=introduction>Introduction</h1><p>There are several mechanisms for protecting applications at runtime. However, what to use and how effective will it be is subject to the application&rsquo;s environment.</p><p>eBPF is a powerful mechanism which is being used commonly for security usecases these days. It provides deep observability by directly instrumenting the OS kernel. However, a side effect of this is the need of privileged access of some form in the system.</p><p>It is also noteworthy that cloud platforms recently have started to abstract away infrastructure, hiding many configuration knobs, so that users can have a more smoother and secure experience. An example is AWS Fargate. Available to use with ECS and EKS clusters, it abstracts away the underlying EC2 instances by adding it&rsquo;s own agent in the usual container data plane and further isolates by running single workload per instance. It also restricts certain primitives as an attempt to keep the enviornment secure.</p><p>Thus, in this and upcoming blogs I&rsquo;ll be diving deep into a couple of alternate mechanisms which can be used for security without requiring as many privileges.</p><h1 id=ptrace>ptrace</h1><p><a href=https://man7.org/linux/man-pages/man2/ptrace.2.html>ptrace</a> is a system call in *nix operating systems. It allows a process (tracer) to inspect and manipulate the state of another process (tracee).</p><p>But ptrace has existed for a long time. It is very likely that you&rsquo;ve used a tool based on ptrace. Debuggers like gdb and delve use ptrace to insert breakpoints into your program, <a href=https://man7.org/linux/man-pages/man1/strace.1.html>strace</a> uses ptrace to trace syscalls made by an application and so on.</p><h2 id=ptrace-101>ptrace 101</h2><p>In Linux, the ptrace syscall signature looks like:</p><pre tabindex=0><code>long ptrace(enum __ptrace_request request, pid_t pid,
+            void *addr, void *data);
+</code></pre><ul><li>The first argument is a &ldquo;request&rdquo; to specify actions to be performed, as defined by <a href=https://elixir.bootlin.com/glibc/latest/source/sysdeps/generic/sys/ptrace.h>ptrace</a>. We&rsquo;ll take a look at some of the requests soon.</li><li>The second argument is PID of the tracee. It&rsquo;s called pid, which is true in context of a single-threaded process but it&rsquo;s actually always a thread ID. If working with a multi threaded process, a ptrace request takes action on a single thread and not the entire process. You&rsquo;ll find process and thread being used interchangeably here as well as in man ptrace.</li><li>The third specifies an address in tracee&rsquo;s address space which the request will act on.</li><li>The fourth is an address in the tracer&rsquo;s address space for storing data to send or retrieve from the request.</li></ul><h3 id=tracing-syscalls-with-ptrace>Tracing syscalls with ptrace</h3><p>A very basic use case of ptrace is to trace syscalls, as seen with strace. Let&rsquo;s try to understand how it works. If you&rsquo;re new to syscall internals, I&rsquo;ve included a link in additional references that helped me understand how they are executed.</p><p>So, there are two ways a tracer can initialize a trace.</p><ul><li>By attaching to some already running process. Here the tracer sends a <code>PTRACE_ATTACH</code> request and waits(man wait) for the tracee to stop. It can also send a <code>PTRACE_SEIZE</code> without stopping the process. Though for security, there are limitations to which processes a tracer can attach and modify, implemented with Linux DAC, capabilities and LSMs.</li><li>By forking and executing the process to be traced as it&rsquo;s child. Here, the child process is required to send a <code>PTRACE_TRACEME</code> request before TRAP-ping itself, thereby allowing a waiting parent to take control. The tracer then creates a <code>PTRACE_SYSCALL</code> or similar request allowing the tracee to continue execution.</li></ul><p>There are a few other complexities relating to <code>PTRACE_EVENT*</code>s involved when attaching to an existing process but the tracing loop remains the same. We&rsquo;ll be working with the latter for making our examples generic.</p><p>To keep things further simple, our examples will be focussed more on single threaded processes. Tracing multithreaded processes involve handling of <code>PTRACE_EVENT*</code>s and can make up a blog of their own.</p><p><img src=/ptrace-init.png alt="ptrace init"></p><p>Now, upon <strong>every</strong> syscall entry/exit, single instruction or signal, the tracee gets trapped and control is given to tracer. We&rsquo;ll come to this later under <a href=#performance>#performance</a>.</p><p>Tracer can do whatever it wants with the state of tracee. Well, not whatever but only whatever behaviour is defined by ptrace&mldr; at least in the best case scenario :P. There are plenty of requests which can be used to interact with the tracee&rsquo;s state.</p><p>For e.g. strace uses <code>PTRACE_GET_SYSCALL_INFO</code> to get syscall number and arguments. <code>PTRACE_PEEK*</code> and <code>PTRACE_GET*</code> are family of requests that allow tracer to read the state while <code>PTRACE_POKE*</code> and <code>PTRACE_SET*</code> allow changing the state. These requests further are classified based on different process address spaces.</p><p><img src=/ptrace-loop.png alt="ptrace tracer loop"></p><h3 id=security-enforcement-with-ptrace>Security Enforcement With ptrace</h3><p>Now, if we can use ptrace to inspect and change the process state, it should be possible to use it to define what a process can and cannot do. Further, since ptrace can do all this in the userspace itself, we can use it to create a sandbox like environment and do enforcement only in the context of our workloads, reducing the coupling with underlying infrastructure.</p><p>Since we know the basics, there is nothing special here. Upon getting trapped, the tracer gets the tracee&rsquo;s registers, matches it with enforcement rules and modifies the reigster pointed by rax (or eax depending on arch), which generally contains the syscall return code, to EPERM (man errno), thus failing the syscall execution. A signal to kill the tracee might be sent as well.</p><p><img src=/ptrace-enforcement.png alt=ptrace-enforcement></p><h2 id=enough-talking-show-me-some-code>Enough talking. SHOW ME SOME CODE!</h2><p>Fair enough.</p><p>We&rsquo;ll try creating a simple program to demonstrate the above blocking mechanism. We&rsquo;ll be blocking a couple of syscalls, with a generic approach that can be used to block other syscalls as well. Some parts of this code has been borrowed from Liz Rice&rsquo;s <a href=https://medium.com/hackernoon/strace-in-60-lines-of-go-b4b76e3ecd64>strace-from-scratch</a>.</p><p>You can find the complete code at <a href=https://github.com/DelusionalOptimist/ptrace-box>https://github.com/DelusionalOptimist/ptrace-box</a></p><p>First, let&rsquo;s initialize the tracer & tracee.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// to check if user has supplied a command to be executed or not
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>if</span> len(<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>) &lt; <span style=color:#ae81ff>2</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Usage: %s &lt;cmd&gt; &lt;args&gt;...\n&#34;</span>, <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>0</span>])
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Trace: &#34;</span>, <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>1</span>:])
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// preparing the command to be executed by child process
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>cmd</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>exec</span>.<span style=color:#a6e22e>Command</span>(<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>1</span>], <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>2</span>:]<span style=color:#f92672>...</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>Stderr</span> = <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Stderr</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>Stdout</span> = <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Stdout</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>Stdin</span> = <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Stdin</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>SysProcAttr</span> = <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SysProcAttr</span>{
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// this is equivalent of a child calling PTRACE_TRACEME.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// upon seeing this attribute the internal function which handles fork and
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// exec sends the request
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>Ptrace</span>: <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// certain ptrace requests require control at the OS thread level
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// thus we lock the OS thread so that the Go runtime rescheduling doesn&#39;t
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// cause unexpected errors
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// ref: https://github.com/golang/go/issues/7699
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>LockOSThread</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>defer</span> <span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>UnlockOSThread</span>()
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// cmd.Start() is a deep wrapper over syscall.forkexec
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// it forks a new child but since we have set ptrace proc attribute,
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// it stops itself and waits for the tracer before executing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>Start</span>()
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Failed to create a child: %s\n&#34;</span>, <span style=color:#a6e22e>err</span>.<span style=color:#a6e22e>Error</span>())
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>child</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>Process</span>.<span style=color:#a6e22e>Pid</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// now we wait for the child to get trapped
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>wstatus</span> <span style=color:#f92672>:=</span> new(<span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>WaitStatus</span>)
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// we&#39;ll be using unix.wait4 as cmd.Wait doesn&#39;t handle signals well
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>Wait4</span>(<span style=color:#a6e22e>child</span>, <span style=color:#a6e22e>wstatus</span>, <span style=color:#ae81ff>0</span>, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Failed to wait for child. Err: %s\n&#34;</span>, <span style=color:#a6e22e>err</span>.<span style=color:#a6e22e>Error</span>())
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>wstatus</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// tracee has stopped itself by sending a trap signal
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// tracer can now take over
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>wstatus</span>.<span style=color:#a6e22e>Stopped</span>() <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>wstatus</span>.<span style=color:#a6e22e>StopSignal</span>() <span style=color:#f92672>==</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SIGTRAP</span> {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Tracee (%d) trapped...\n&#34;</span>, <span style=color:#a6e22e>child</span>)
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>	} <span style=color:#66d9ef>else</span> {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// if the above&#39;s not the case, something is wrong
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Tracee (%d) status unknown...\n&#34;</span>, <span style=color:#a6e22e>child</span>)
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// PTRACE_O_EXITKILL ensures that tracee gets killed when tracee exits thus
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// preventing jailbreaks. Setting this will have effect only after the child
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#75715e>// process is trapped for a waiting parent
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSetOptions</span>(<span style=color:#a6e22e>child</span>, <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PTRACE_O_EXITKILL</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// start tracing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>child</span>, <span style=color:#a6e22e>wstatus</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Failed to get trace: %s\n&#34;</span>, <span style=color:#a6e22e>err</span>.<span style=color:#a6e22e>Error</span>())
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Tracer exiting...&#34;</span>)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>status</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>WaitStatus</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// to be implemented
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Upon running the above code with a command, we&rsquo;ll see that the tracee process gets trapped and then the tracer exits, killing the tracee along with it. Had we not set <code>PTRACE_O_EXITKILL</code> the tracee would&rsquo;ve escaped and completed execution in this situation.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>$ go build -o ptrace-box .; ./ptrace-box cat file.txt
+</span></span><span style=display:flex><span>Trace:  <span style=color:#f92672>[</span>cat file.txt<span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>50347<span style=color:#f92672>)</span> trapped...
+</span></span><span style=display:flex><span>./ptrace-box exiting...
+</span></span></code></pre></div><p>Also, what if due to some error the tracer quits before it sets the <code>PTRACE_O_EXITKILL</code> option? That would be an escape as well. Since we are working with security, we shouldn&rsquo;t take any chances! The tracee should quit if tracer quits at any point. An easy way to set this is using the <a href=https://man7.org/linux/man-pages/man2/prctl.2.html>prctl</a> syscall. In Go, you can specify it with just a <code>SysProcAttr</code> option. We&rsquo;ll add this to the existing <code>SysProcAttr</code> object of <code>cmd</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span>	<span style=color:#a6e22e>cmd</span>.<span style=color:#a6e22e>SysProcAttr</span> = <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SysProcAttr</span>{
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// this is equivalent of a child calling PTRACE_TRACEME.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// upon seeing this attribute the internal function which handles fork and
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// exec sends the request
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>Ptrace</span>: <span style=color:#66d9ef>true</span>,
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// kill the child when parent dies even if the parent is not a tracer
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>Pdeathsig</span>: <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SIGKILL</span>,
+</span></span><span style=display:flex><span>	}
+</span></span></code></pre></div><p>Let&rsquo;s continue with our tracer logic. Lot of the things I&rsquo;ll be doing will be for <code>x86_64</code>. But I&rsquo;ll be adding references along on how you do the same for your arch.</p><p>We&rsquo;ll be intercepting the syscall and printing it&rsquo;s number by getting it from the <code>orig_rax</code> (only in <code>x86_64</code>). Take a look into <a href=https://man7.org/linux/man-pages/man2/syscall.2.html>man syscall</a> for identifying which register stores the syscall number in your arch. Also, the number might be stored in both <code>rax</code> and <code>orig_rax</code> registers. However, we&rsquo;ll be using <code>orig_rax</code>. Here is an explanation as to <a href=https://stackoverflow.com/questions/6468896/why-is-orig-eax-provided-in-addition-to-eax>why is orig_eax provided in addition to eax?</a> (eax was i386 equivalent of rax).</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>status</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>WaitStatus</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>var</span> (
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>err</span> <span style=color:#66d9ef>error</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>regs</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceRegs</span>
+</span></span><span style=display:flex><span>	)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// let the execve syscall continue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSyscall</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// wait for tracee to get trapped on next syscall
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>Wait4</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>status</span>, <span style=color:#ae81ff>0</span>, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// trace until tracee doesn&#39;t exit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>for</span> !<span style=color:#a6e22e>status</span>.<span style=color:#a6e22e>Exited</span>() {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// when the tracee is in a a syscall-stop
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// do the needed processing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceGetRegs</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;syscall NR:&#34;</span>, <span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Orig_rax</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// resume the tracee execution again
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSyscall</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// wait for tracee to get trapped again
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>Wait4</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>status</span>, <span style=color:#ae81ff>0</span>, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Tracee (%d) exited...\n&#34;</span>, <span style=color:#a6e22e>pid</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Upon running this, the output might look something like below. You might see two lines for each syscall because as mentioned earlier, tracee gets trapped on both syscall entry and exit.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>$ go build -o ptrace-box .; ./ptrace-box cat file.txt
+</span></span><span style=display:flex><span>Trace:  <span style=color:#f92672>[</span>cat file.txt<span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>174688<span style=color:#f92672>)</span> trapped...
+</span></span><span style=display:flex><span>syscall NR: <span style=color:#ae81ff>59</span>     <span style=color:#75715e># execve</span>
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>A line in file.txt <span style=color:#75715e># write file content to stdout</span>
+</span></span><span style=display:flex><span>...
+</span></span><span style=display:flex><span>syscall NR: <span style=color:#ae81ff>3</span>      <span style=color:#75715e># close</span>
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>174688<span style=color:#f92672>)</span> exited...
+</span></span><span style=display:flex><span>Tracer exiting...
+</span></span></code></pre></div><p>Now let&rsquo;s understand how we&rsquo;ll actually deny the syscall.</p><p>First, we&rsquo;ll need to identify if a syscall is a <em>blocklisted</em> syscall by matching the syscall number.</p><p>Next, we&rsquo;ll match one of the parameters passed while making the syscall. For this, we&rsquo;ll need to know the signature of the blocklisted syscall. Refer this <a href=https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md>Linux syscalls table</a>.</p><p>I&rsquo;ll pick up two syscalls for this demo. <code>openat</code> and <code>unlinkat</code>. Why these two? It&rsquo;ll get cleared soon.
+Upon looking it up in the table, you&rsquo;ll find that for <code>openat</code>, <code>const char *filename</code> is arg1 and is stored in the <code>%rsi</code> register in <code>x86_64</code>. Same goes for <code>unlinkat</code> as well.</p><p>Once we have matched the syscall no. and filename, we&rsquo;ll modify the register holding the return value of the syscall i.e. <code>rax</code>.
+Upon a successful call to <code>openat</code>, the value stored in <code>rax</code> is a file descriptor to the opened file or an <a href=https://man7.org/linux/man-pages/man3/errno.3.html>errno</a>. For <code>unlinkat</code>, the return value is <code>0</code> or an errno.
+We&rsquo;ll be setting the return value for these to <code>EPERM</code>, the generic error sent whenever an operation doesn&rsquo;t have enough permissions to proceed.</p><p>Once we set these, the library function calling them should get an error and syscall should get blocked. Seems straight forward, right? There&rsquo;s a catch.</p><p>There is no way to stop a syscall. If we change <code>rax</code> on syscall-entry-stop then syscall will still run as normal and change the register upon completion.</p><p>If we change <code>rax</code> value on syscall-exit-stop, we&rsquo;ll be too late. Though this approach might work for syscalls which return a value that the library functions depend on, for e.g. <code>openat</code> returns an fd or an error, it still won&rsquo;t work for others which change something while the syscall is run, for e.g. <code>unlinkat</code> returns 0 or an error but the file is deleted before syscall-exit-stop.</p><p>So is there no way to block a syscall? No, there is a way!</p><p>I&rsquo;m thankful to <a href=https://twitter.com/daemon1024>Barun</a> for directing me towards <a href=https://nullprogram.com/blog/2018/06/23/>this</a> blog by Chris Wellons. I realized that the trick is to set the syscall NR (<code>orig_rax</code>) as invalid upon syscall-entry-stop. This way the system call dispatcher won&rsquo;t recognize the syscall and thus not run it at all!</p><p>Let&rsquo;s try to prove if it works by fiddling around with the <code>trace()</code> function. At first we&rsquo;ll only modify <code>rax</code>.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span><span style=color:#66d9ef>var</span> (
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// constants
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>EPERM</span> = uint64(<span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>EPERM</span>)
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>INVAL</span> = uint64(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>main</span>() {
+</span></span><span style=display:flex><span>	<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>userFilePath</span>, <span style=color:#a6e22e>ok</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>LookupEnv</span>(<span style=color:#e6db74>&#34;FILE_PATH&#34;</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> !<span style=color:#a6e22e>ok</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Env var \&#34;FILE_PATH\&#34; must be set...&#34;</span>)
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Trace: &#34;</span>, <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Args</span>[<span style=color:#ae81ff>1</span>:])
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Block: &#34;</span>, <span style=color:#a6e22e>userFilePath</span>)
+</span></span><span style=display:flex><span>	<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// start tracing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>child</span>, <span style=color:#a6e22e>wstatus</span>, <span style=color:#a6e22e>userFilePath</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Failed to trace (%d): %s\n&#34;</span>, <span style=color:#a6e22e>child</span>, <span style=color:#a6e22e>err</span>.<span style=color:#a6e22e>Error</span>())
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Exit</span>(<span style=color:#ae81ff>1</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Println</span>(<span style=color:#e6db74>&#34;Tracer exiting...&#34;</span>)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>status</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>WaitStatus</span>, <span style=color:#a6e22e>userFilePath</span> <span style=color:#66d9ef>string</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>var</span> (
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>err</span> <span style=color:#66d9ef>error</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>regs</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceRegs</span>
+</span></span><span style=display:flex><span>	)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// let the execve syscall continue
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSyscall</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// wait for tracee to get trapped on next syscall
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>Wait4</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>status</span>, <span style=color:#ae81ff>0</span>, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// trace until tracee doesn&#39;t exit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>for</span> !<span style=color:#a6e22e>status</span>.<span style=color:#a6e22e>Exited</span>() {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// while the tracee is in a syscall-stop
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// do the needed processing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceGetRegs</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>checkAndBlock</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>, <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SYS_OPENAT</span>, <span style=color:#a6e22e>userFilePath</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// resume the tracee execution again
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSyscall</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// wait for tracee to get trapped again
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>_</span>, <span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>Wait4</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>status</span>, <span style=color:#ae81ff>0</span>, <span style=color:#66d9ef>nil</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Printf</span>(<span style=color:#e6db74>&#34;Tracee (%d) exited...\n&#34;</span>, <span style=color:#a6e22e>pid</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>checkAndBlock</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>regs</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceRegs</span>, <span style=color:#a6e22e>syscallNR</span> <span style=color:#66d9ef>uint64</span>, <span style=color:#a6e22e>userFilePath</span> <span style=color:#66d9ef>string</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Orig_rax</span> <span style=color:#f92672>==</span> <span style=color:#a6e22e>syscallNR</span> {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// the largest path value that can be stored in the RSI is
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// PATH_MAX bytes long
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>buff</span> <span style=color:#f92672>:=</span> make([]<span style=color:#66d9ef>byte</span>, <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PathMax</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// `PTRACE_PEEKTEXT` request to get file path value from RSI register
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// address in tracee&#39;s address space
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>n</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtracePeekText</span>(<span style=color:#a6e22e>pid</span>, uintptr(<span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Rsi</span>), <span style=color:#a6e22e>buff</span>)
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>n</span> <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// there might be garbage data due to the size of our buffer
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// the string that we need however is null terminated
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>nullIdx</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>bytes</span>.<span style=color:#a6e22e>IndexByte</span>(<span style=color:#a6e22e>buff</span>[:], <span style=color:#ae81ff>0</span>)
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// get the absolute path w.r.t tracee from the filename
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>filePath</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>absPath</span>(<span style=color:#a6e22e>pid</span>, string(<span style=color:#a6e22e>buff</span>[:<span style=color:#a6e22e>nullIdx</span>]))
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// match file path and set the return value (RAX) as EPERM
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// with a PTRACE_SET_REGS request
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>userFilePath</span> <span style=color:#f92672>==</span> <span style=color:#a6e22e>filePath</span> {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Rax</span> = <span style=color:#f92672>-</span><span style=color:#a6e22e>EPERM</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSetRegs</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>regs</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>				<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>			}
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// get absolute path
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>absPath</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>p</span> <span style=color:#66d9ef>string</span>) <span style=color:#66d9ef>string</span> {
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// if relative path
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>if</span> !<span style=color:#a6e22e>path</span>.<span style=color:#a6e22e>IsAbs</span>(<span style=color:#a6e22e>p</span>) {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>path</span>.<span style=color:#a6e22e>Join</span>(<span style=color:#a6e22e>getProcCwd</span>(<span style=color:#a6e22e>pid</span>), <span style=color:#a6e22e>p</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>path</span>.<span style=color:#a6e22e>Clean</span>(<span style=color:#a6e22e>p</span>)
+</span></span><span style=display:flex><span>}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e>// read cwd from procfs
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>getProcCwd</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>) <span style=color:#66d9ef>string</span> {
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>fileName</span> <span style=color:#f92672>:=</span> <span style=color:#e6db74>&#34;/proc/self/cwd&#34;</span>
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>pid</span> &gt; <span style=color:#ae81ff>0</span> {
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>fileName</span> = <span style=color:#a6e22e>fmt</span>.<span style=color:#a6e22e>Sprintf</span>(<span style=color:#e6db74>&#34;/proc/%d/cwd&#34;</span>, <span style=color:#a6e22e>pid</span>)
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#a6e22e>s</span>, <span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>os</span>.<span style=color:#a6e22e>Readlink</span>(<span style=color:#a6e22e>fileName</span>)
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>		<span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#34;&#34;</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>s</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>Upon executing this with a command that tries to access <code>file.txt</code>, the output may look something like:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [21:08:00]</span>
+</span></span><span style=display:flex><span>$ cat file.txt
+</span></span><span style=display:flex><span>hello
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [21:08:05]</span>
+</span></span><span style=display:flex><span>$ go build -o ptrace-box .; FILE_PATH<span style=color:#f92672>=</span><span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>/file.txt ./ptrace-box cat file.txt
+</span></span><span style=display:flex><span>Trace:  <span style=color:#f92672>[</span>cat file.txt<span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>Block:  /home/rudraksh/dev/ptrace-box/file.txt
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>365903<span style=color:#f92672>)</span> trapped...
+</span></span><span style=display:flex><span>cat: file.txt: Operation not permitted
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>365903<span style=color:#f92672>)</span> exited...
+</span></span><span style=display:flex><span>Tracer exiting...
+</span></span></code></pre></div><p>Cool, we can block <code>openat</code>.
+Now change the function call to <code>checkAndBlock()</code> for blocking <code>unlinkat</code> and create a violation using the <code>rm</code> command:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span>		<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>checkIfBlocked</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>, <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SYS_UNLINKAT</span>, <span style=color:#a6e22e>userFilePath</span>)
+</span></span></code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [21:09:43]</span>
+</span></span><span style=display:flex><span>$ cat file.txt
+</span></span><span style=display:flex><span>hello
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [21:09:45]</span>
+</span></span><span style=display:flex><span>$ go build -o ptrace-box .; FILE_PATH<span style=color:#f92672>=</span><span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>/file.txt ./ptrace-box rm file.txt
+</span></span><span style=display:flex><span>Trace:  <span style=color:#f92672>[</span>rm file.txt<span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>Block:  /home/rudraksh/dev/ptrace-box/file.txt
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>366825<span style=color:#f92672>)</span> trapped...
+</span></span><span style=display:flex><span>rm: cannot remove <span style=color:#e6db74>&#39;file.txt&#39;</span>: Operation not permitted
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>366825<span style=color:#f92672>)</span> exited...
+</span></span><span style=display:flex><span>Tracer exiting...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [21:09:49]</span>
+</span></span><span style=display:flex><span>$ cat file.txt
+</span></span><span style=display:flex><span>cat: file.txt: No such file or directory
+</span></span></code></pre></div><p>We have blocked the syscall according to this output! But <code>file.txt</code> has been still removed : (
+As expected, the <em>operation not permitted</em> is just because of glibc&rsquo;s wrapper for the syscall.</p><p>Now let&rsquo;s try by setting the syscall NR as invalid in <code>checkAndBlock()</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span>		<span style=color:#75715e>// match file path and set the return value (RAX) as EPERM
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// and Orig_rax to invalid syscall (0)
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// with a PTRACE_SET_REGS request
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>userFilePath</span> <span style=color:#f92672>==</span> <span style=color:#a6e22e>filePath</span> {
+</span></span><span style=display:flex><span>			<span style=color:#75715e>// hacky way to specify a negative u64
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>			<span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Orig_rax</span> = <span style=color:#f92672>-</span><span style=color:#a6e22e>INVAL</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>regs</span>.<span style=color:#a6e22e>Rax</span> = <span style=color:#f92672>-</span><span style=color:#a6e22e>EPERM</span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>err</span> <span style=color:#f92672>:=</span> <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceSetRegs</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#a6e22e>regs</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>				<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>			}
+</span></span><span style=display:flex><span>		}
+</span></span></code></pre></div><p>Upon running this:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [10:22:01]</span>
+</span></span><span style=display:flex><span>$ cat file.txt
+</span></span><span style=display:flex><span>hello
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [10:22:02]</span>
+</span></span><span style=display:flex><span>$ go build -o ptrace-box .; FILE_PATH<span style=color:#f92672>=</span><span style=color:#66d9ef>$(</span>pwd<span style=color:#66d9ef>)</span>/file.txt ./ptrace-box rm file.txt
+</span></span><span style=display:flex><span>Trace:  <span style=color:#f92672>[</span>rm file.txt<span style=color:#f92672>]</span>
+</span></span><span style=display:flex><span>Block:  /home/rudraksh/dev/ptrace-box/file.txt
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>26158<span style=color:#f92672>)</span> trapped...
+</span></span><span style=display:flex><span>rm: cannot remove <span style=color:#e6db74>&#39;file.txt&#39;</span>: Operation not permitted
+</span></span><span style=display:flex><span>Tracee <span style=color:#f92672>(</span>26158<span style=color:#f92672>)</span> exited...
+</span></span><span style=display:flex><span>Tracer exiting...
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># rudraksh @ pingu in ~/dev/ptrace-box [10:22:05]</span>
+</span></span><span style=display:flex><span>$ cat file.txt
+</span></span><span style=display:flex><span>hello
+</span></span></code></pre></div><p>So <code>rm</code> gets actually blocked now!</p><p>One last optimization we can do is to modify registers only on syscall entry. The effect will be same and we&rsquo;ll have better performance!</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-Go data-lang=Go><span style=display:flex><span><span style=color:#66d9ef>func</span> <span style=color:#a6e22e>Trace</span>(<span style=color:#a6e22e>pid</span> <span style=color:#66d9ef>int</span>, <span style=color:#a6e22e>status</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>WaitStatus</span>, <span style=color:#a6e22e>userFilePath</span> <span style=color:#66d9ef>string</span>) <span style=color:#66d9ef>error</span> {
+</span></span><span style=display:flex><span>	<span style=color:#66d9ef>var</span> (
+</span></span><span style=display:flex><span>		<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// to keep track of syscall entry stops
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// ptrace leaves it upto the tracer to do so
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#a6e22e>entry</span> = <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>	)
+</span></span><span style=display:flex><span>	<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>	<span style=color:#75715e>// trace until tracee doesn&#39;t exit
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>	<span style=color:#66d9ef>for</span> !<span style=color:#a6e22e>status</span>.<span style=color:#a6e22e>Exited</span>() {
+</span></span><span style=display:flex><span>		<span style=color:#75715e>// while the tracee is in a syscall-entry-stop
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#75715e>// do the needed processing
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>		<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>entry</span> {
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>PtraceGetRegs</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>				<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>			}
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>			<span style=color:#a6e22e>err</span> = <span style=color:#a6e22e>checkAndBlock</span>(<span style=color:#a6e22e>pid</span>, <span style=color:#f92672>&amp;</span><span style=color:#a6e22e>regs</span>, <span style=color:#a6e22e>unix</span>.<span style=color:#a6e22e>SYS_UNLINKAT</span>, <span style=color:#a6e22e>userFilePath</span>)
+</span></span><span style=display:flex><span>			<span style=color:#66d9ef>if</span> <span style=color:#a6e22e>err</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>nil</span> {
+</span></span><span style=display:flex><span>				<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>err</span>
+</span></span><span style=display:flex><span>			}
+</span></span><span style=display:flex><span>		}
+</span></span><span style=display:flex><span>		<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>		<span style=color:#a6e22e>entry</span> = !<span style=color:#a6e22e>entry</span>
+</span></span><span style=display:flex><span>	}
+</span></span><span style=display:flex><span>	<span style=color:#f92672>...</span>
+</span></span><span style=display:flex><span>}
+</span></span></code></pre></div><p>That&rsquo;s it. We&rsquo;ve built ourselves a simple enforcer which can be used to blocklist sycalls.</p><p>While running an application, you can specify it as an argument of <code>ptrace-box</code> which will ensure you have a sandbox with a set of blocklisted or whitelisted syscalls.</p><h2 id=performance>Performance</h2><p>Remember I mentioned earlier that the tracee would be trapped and wait for tracer at every syscall entry/exit or signal. Yes, every here meant EVERY. Thus there are performance implications of using ptrace. Read <a href=https://gvisor.dev/blog/2023/04/28/systrap-release/>this</a> analysis by gvisor on moving away from ptrace based sandboxing due to performance implications.</p><p>There are a couple of workarounds.</p><ul><li>Set <code>PTRACE_O_TRACESYSGOOD</code>: If intercepting syscalls is the only goal, one can set the option <code>PTRACE_O_TRACESYSGOOD</code>. It would modify the signal received by <code>wait</code> whenever the tracee is in a syscall stop. Thus, the tracer can use this to avoid unecessary inspection of tracee state when the trap is not due to a syscall.</li><li>Seccomp: In simple terms, seccomp allows creating filters on syscalls. A potential filter is to allow tracing of only a limited number of syscalls. The tracer can then chose to stop only on <code>PTRACE_EVENT_SECCOMP</code> rather than each and every event, greatly reducing the number of traps. See <a href="https://www.youtube.com/watch?v=fAcI3NErQw0">this</a> talk on how strace uses seccomp for filtering syscalls and improving performance.</li></ul><p>We&rsquo;ll look at these mechanisms in future posts.</p><h1 id=conclusion>Conclusion</h1><p>Though ptrace based enforcement provides good security in context of unprivileged environments, it still has it&rsquo;s limitations and can&rsquo;t be used to protect applications at the system level</p><h1 id=additional-references>Additional References</h1><ul><li><a href=https://linux-kernel-labs.github.io/refs/heads/master/lectures/syscalls.html>https://linux-kernel-labs.github.io/refs/heads/master/lectures/syscalls.html</a></li><li><a href=https://www.alfonsobeato.net/c/modifying-system-call-arguments-with-ptrace/>https://www.alfonsobeato.net/c/modifying-system-call-arguments-with-ptrace/</a></li><li><a href=https://blog.nelhage.com/2010/08/write-yourself-an-strace-in-70-lines-of-code/>https://blog.nelhage.com/2010/08/write-yourself-an-strace-in-70-lines-of-code/</a></li></ul></p></div><div class=prev-next></div></div></main><footer class=footer><span>&copy; 2023 Rudraksh Pareek</span>
+<span>Made with &#10084;&#65039; using <a target=_blank href=https://github.com/526avijitgupta/gokarna>Gokarna</a></span></footer></body></html>
