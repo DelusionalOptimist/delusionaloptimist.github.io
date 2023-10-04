@@ -1,5 +1,6 @@
 +++
 title = "Reddit for you"
+image = ""
 date = "2021-01-20"
 type = "post"
 tags = ["reddit", "beginner", "curated-content"]

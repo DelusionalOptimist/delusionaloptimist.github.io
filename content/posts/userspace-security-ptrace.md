@@ -1,5 +1,6 @@
 +++
 title = "Userspace Security Mechanisms: Ptrace"
+image = "/ptrace-enforcement.png"
 date = "2023-09-16"
 type = "post"
 tags = ["security", "linux", "ptrace", "cloud"]
