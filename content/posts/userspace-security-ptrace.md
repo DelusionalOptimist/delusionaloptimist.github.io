@@ -36,7 +36,7 @@ long ptrace(enum __ptrace_request request, pid_t pid,
 A very basic use case of ptrace is to trace syscalls, as seen with strace. Let's try to understand how it works. If you're new to syscall internals, I've included a link in additional references that helped me understand how they are executed.
 
 So, there are two ways a tracer can initialize a trace.
-* By attaching to some already running process. Here the tracer sends a `PTRACE_ATTACH` request and waits(man wait) for the tracee to stop. It can also send a `PTRACE_SEIZE` without stopping the process. Though for security, there are limitations to which processes a tracer can attach and modify, implemented with Linux DAC, capabilities and LSMs.
+* By attaching to some already running process. Here the tracer sends a `PTRACE_ATTACH` request and [waits](https://man7.org/linux/man-pages/man2/wait.2.html) for the tracee to stop. It can also send a `PTRACE_SEIZE` without stopping the process. Though for security, there are limitations to which processes a tracer can attach and modify, implemented with Linux DAC, capabilities and LSMs.
 * By forking and executing the process to be traced as it's child. Here, the child process is required to send a `PTRACE_TRACEME` request before TRAP-ping itself, thereby allowing a waiting parent to take control. The tracer then creates a `PTRACE_SYSCALL` or similar request allowing the tracee to continue execution.
 
 There are a few other complexities relating to `PTRACE_EVENT*`s involved when attaching to an existing process but the tracing loop remains the same. We'll be working with the latter for making our examples generic.
@@ -528,7 +528,7 @@ There are a couple of workarounds.
 We'll look at these mechanisms in future posts.
 
 # Conclusion
-Though ptrace based enforcement provides good security in context of unprivileged environments, it still has it's limitations and can't be used to protect applications at the system level
+Ptrace based enforcement provides adequate security in context of unprivileged environments and is ideal to use within containers or FaaS platforms, where not much is known about the underlying infrastructure that workloads run on. However, it still has it's limitations with capabilities and scalibility when it comes to protection at the entire system level.
 
 # Additional References
 - https://linux-kernel-labs.github.io/refs/heads/master/lectures/syscalls.html
