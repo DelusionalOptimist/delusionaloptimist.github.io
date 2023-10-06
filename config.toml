@@ -2,7 +2,7 @@ baseURL = "https://delusionaloptimist.github.io/"
 defaultContentLanguage = "en"
 languageCode = "en"
 
-title = "Rudraksh Pareek (DelusionalOptimist)"
+title = "DelusionalOptimist"
 
 theme = "gokarna"
 
