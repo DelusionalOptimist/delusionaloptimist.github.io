@@ -12,7 +12,7 @@ enableRobotsTXT = true
 [params]
   title = "Hey! I'm Rudraksh."
   subtitle = "I also go by DelusionalOptimist across the interwebs : )"
-	avatarURL = "/rudraksh-pareek.jpg"
+	avatarURL = "/rudraksh-pareek.webp"
   footer = "Rudraksh Pareek"
   socialIcons = [
     {name = "github", url = "https://github.com/DelusionalOptimist/"},
